@@ -1,0 +1,18 @@
+1 baan out (3 waardig)
+1 ADC
+1 Richting
+
+polo step,dir,3 stepping, enable,sleep -> 7
+
+relais aansturing voor de aansluitende rails
+6 decodeer bits voor 48 uitgangen.
+1 homing 
+
+2 loc detectie
+
+totaal 19 .... moet dus 1 pin sparen op de polo.
+
+2 uart aansluiting communicatie.
+
+
+
