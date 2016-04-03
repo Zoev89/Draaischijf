@@ -20,8 +20,10 @@
 
 //
 // Eeprom Adres offset = 0  blok spanning commandos zoals een blok aansturing behalve support voor seinpalen
-// Eeprom Adres offset = 1  relais aansturing 0x3f = richting normaal 0x3e = richting inverted alle andere waardes worden voor de blokrelais selectie waarvan ik alleen 0..5 in gebruik heb
-// Eeprom Adres offset = 2  positie commando 0x3f = get turn status return is TURNING or TURNING_DONE
+// Eeprom Adres offset = 1  relais aansturing 0x3f = richting inverted 0x3e = richting normaal alle andere waardes worden
+//                          voor de blokrelais selectie waarvan ik alleen 0..5 in gebruik heb
+//                          daar er maar 48 uitgangen zijn is een waarde van 0x30(48) al genoeg om alle relais uit te zetten
+// Eeprom Adres offset = 2  positie commando 0x3f = get turn status return is TURNING or TURNING_DONE 61= enable midden detectie word uitgezet met zet snelheid op 0
 
 
 // Stepping defines
@@ -62,9 +64,7 @@
 // Dus de eindtransistoren kunnen te heet worden bij grote belasting. Dit kan
 // bijvoorbeeld in dubbel tractie bedrijf gebeuren als er twee locs gebruikt worden
 // die veel stroom trekken.
-// mmm ik kom op 175 op de test print en dat is niet genoeg voor hoog dus even -85 ipv 70
-// TODO verklaar
-#define HIGH_LEVEL_DREMPEL	((255-85)<<8)	//de positive spannings drempel voor kortsluit detectie
+#define HIGH_LEVEL_DREMPEL	((255-70)<<8)	//de positive spannings drempel voor kortsluit detectie
 #define LOW_LEVEL_DREMPEL	((70)<<8)	//de negative spannings drempel voor kortsluit detectie
 #define KORTSLUIT_SPANNING	1	// stand 1 van de regelaar. Hangt nu af van wat er in
                     // de tabel staat
@@ -242,6 +242,11 @@ ISR(USART_RXC_vect)
         // save de status van het brugblok bij de start van de AD converter
         brugBlokDDR = DDRD;
         ADCSR |= (1<<ADSC); // start de AD conversie de multiplexer word nu niet ingesteld ik neem aan dat die goed staat voor 1 blok
+
+        // wacht lus want anders is de adc nog niet klaar met sample hold voordat de uitgang wijzigd.
+        // nu 48us voordat de uitgang wijzigd en grogweg 70us nadat de uitgang wijzigd (heb 1.5 adc clock out of 13.5 nodig voor sample hold)
+        for (volatile int i=0;i<30;i++);
+
         StepControl();
         if (middenDetectie)
         {
@@ -253,7 +258,8 @@ ISR(USART_RXC_vect)
             }
         }
 
-        uint8_t pulse = pgm_read_byte(&pulseTabel[snelheid&0x3f][pulseBreedteCount>>3]);
+        uint8_t snel = (snelheid & 0x40) ? 0: snelheid; // als er kortsluiting is dan 0 gebruiken
+        uint8_t pulse = pgm_read_byte(&pulseTabel[snel&0x3f][pulseBreedteCount>>3]);
         if (pulse & (1<<(pulseBreedteCount&0x7)))
         {
             // moet spanning geleverd worden
@@ -403,7 +409,8 @@ void main()
     // ingang
     // PC2 Homing
     // PC3 Platform middel
-    DDRC = (1 << DDC1) | (1 << DDC4);
+    // PC5  output for debugging
+    DDRC = (1 << DDC1) | (1 << DDC4) | (1<<DDC5);
 
     DDRB = (1 << DDB0)| (1 << DDB1)| (1 << DDB2)| (1 << DDB3)| (1 << DDB4)| (1 << DDB5); // 0..5 output
     PORTB = (1<<PB2) + STEPPING;  // motor disabled and fullstep enable alleen als we een draai commando krijgen
@@ -418,7 +425,8 @@ void main()
     // met een klok van 14.7453Mhz en de deler op 128 geeft een AD klok van 115 Khz
     ADCSR =  (1<<ADEN) + (1<<ADIE)+(1<<ADPS2) + (1<<ADPS1) + (1<<ADPS0);
 
-    for (int i=0;i<48;i++)
+
+    for (uint8_t i=0;i<48;i++)
     {
         stepTabel[i][0] = eeprom_read_word((uint16_t*)&stepTabelRom[i][0]);
         stepTabel[i][1] = eeprom_read_word((uint16_t*)&stepTabelRom[i][1]);
@@ -448,7 +456,7 @@ void main()
     uartData1 = uartData2 = 1; // geen 0 want er is geen sync
     wdt_enable(WDTO_60MS);
     sei ();
-    huisVerlichting(false);
+    huisVerlichting(true);
 
     do
     {
@@ -656,14 +664,21 @@ void main()
                     else if (data==62)
                     {
                         // dit duurt telang zodat het antwoord niet optijd is.
-                        sei ();
-                        UDR = ((step == 0) ? TURNING_DONE : TURNING) + middenDetected*2;
-                        for (int i=0;i<48;i++)
+                        UDR = ((step == 0) ? TURNING_DONE : TURNING) + middenDetected*2 + needsHoming*4;
+                        // houd de interrupt disabled want deze loop kan lang duren.
+                        // het duurd 8.5ms per byte voor een write dus totaal voor de gehele table kan het dus
+                        // grofweg 800 ms duren
+                        // daarna is alle communicatie verloren dus wachten tot de watch dog een reset door voerd.
+                        // Houd de watchdog in leven zolang we in de loop zitten.
+                        for (uint8_t i=0;i<48;i++)
                         {
                             eeprom_write_word((uint16_t*)&stepTabelRom[i][0], (uint16_t)stepTabel[i][0]);
+                            wdt_reset();
                             eeprom_write_word((uint16_t*)&stepTabelRom[i][1], (uint16_t)stepTabel[i][1]);
+                            wdt_reset();
+
                         }
-                        cli();
+                        return; // beeindigd het programma
                     }
                     else if (data==0x3f)
                     {
