@@ -36,7 +36,7 @@ $Descr A3 16535 11693
 encoding utf-8
 Sheet 1 1
 Title "DraaiPlatform aansturing"
-Date "3 jan 2016"
+Date "3 apr 2016"
 Rev "1.0"
 Comp "Eric"
 Comment1 ""
@@ -453,7 +453,7 @@ L R R4
 U 1 1 563CD298
 P 3750 6400
 F 0 "R4" V 3830 6400 40  0000 C CNN
-F 1 "220E" V 3757 6401 40  0000 C CNN
+F 1 "132E" V 3757 6401 40  0000 C CNN
 F 2 "~" V 3680 6400 30  0000 C CNN
 F 3 "~" H 3750 6400 30  0000 C CNN
 	1    3750 6400

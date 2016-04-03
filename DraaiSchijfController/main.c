@@ -23,6 +23,8 @@
 // Eeprom Adres offset = 1  relais aansturing 0x3f = richting inverted 0x3e = richting normaal alle andere waardes worden
 //                          voor de blokrelais selectie waarvan ik alleen 0..5 in gebruik heb
 //                          daar er maar 48 uitgangen zijn is een waarde van 0x30(48) al genoeg om alle relais uit te zetten
+//                          60 = midden detectie aan
+//                          61 = midden detectie uit (resets the detector)
 // Eeprom Adres offset = 2  positie commando 0x3f = get turn status return is TURNING or TURNING_DONE 61= enable midden detectie word uitgezet met zet snelheid op 0
 
 
@@ -78,6 +80,7 @@ volatile bool inSync; // in assembly is dit state  met 0=outof sync  en 1 = insy
 volatile uint8_t brugBlokDDR; // saved DDR statuis voor de AD conversie
 uint8_t syncCount;
 volatile bool doHoming;
+volatile bool homingReverse;
 
 #define AANTAL_PULSEN 63
 volatile uint8_t pulseBreedteCount; // AANTAL_PULSEN=63
@@ -161,7 +164,14 @@ void Homing()
 {
     if (doHoming)
     {
-        if (PINC & (1<<PC2))
+        if (homingReverse)
+        {
+            if (step == 0)
+            {
+                homingReverse = false;
+            }
+        }
+        else if (PINC & (1<<PC2))
         {
             huidigePositie = 0;
             PORTB |= (1<<PB0); // terug
@@ -363,15 +373,15 @@ ISR(ADC_vect)
     }
 }
 
-void updatePosition(int8_t update, bool alternateTable)
+void updatePosition(int8_t update)
 {
-    stepTabel[huidigePositie][alternateTable] += update;
+    stepTabel[huidigePositie][huidigePosititieTweedeIndex] += update;
     if (huidigePositie == 0)
     {
         // voor de home position alles tabel entries updaten
         for (int i=1;i<48;i++)
         {
-            stepTabel[i][alternateTable] += update;
+            stepTabel[i][huidigePosititieTweedeIndex] += update;
         }
     }
     if (update>=0)
@@ -517,8 +527,6 @@ void main()
 
                         UDR = blokOff >> 8;
                         snelheid = snelheid &0x80; // onthoud richting
-                        middenDetected = false;
-                        middenDetectie = false;  // reset de midden detectie
                         // reset de blok on meeting
                         blokOn = (snelheid & 0x80) ?  HIGH_LEVEL: LOW_LEVEL;
 
@@ -548,11 +556,21 @@ void main()
                     {
                         PORTC &= ~(1<<PC1);
                     }
+                    else if (data==60)
+                    {
+                        middenDetectie = true;
+                    }
+                    else if (data==61)
+                    {
+                        middenDetected = false;
+                        middenDetectie = false;
+                    }
                     else
                     {
                         // relais pd2..pd6
                         PORTD = (PORTD & 0b10000011) | ((data&0b011111)<<2);
                     }
+
                     UDR = 0; // misschien iets van de detectors
                 }
                 else if (((startAdres+2) == adres) || ((startAdres+3) == adres))
@@ -600,66 +618,68 @@ void main()
                     // 58,59 +32,-32
                     // eind updates in de stap tabel
                     // 60 home
-                    // 61 enable midden detectie met zet snelheid =0 reset de middenDetectie
                     // 62 write eeprom staptabel
                     // 63 get bitfiled status bit 0 = TURNING  bit 1 = middenDetected  bit 2 = needsHoming
 
                     else if (data==48)
                     {
-                        updatePosition(1,tweedeIndex);
+                        updatePosition(1);
                     }
                     else if (data==49)
                     {
-                        updatePosition(-1,tweedeIndex);
+                        updatePosition(-1);
                     }
                     else if (data==50)
                     {
-                        updatePosition(2,tweedeIndex);
+                        updatePosition(2);
                     }
                     else if (data==51)
                     {
-                        updatePosition(-2,tweedeIndex);
+                        updatePosition(-2);
                     }
                     else if (data==52)
                     {
-                        updatePosition(4,tweedeIndex);
+                        updatePosition(4);
                     }
                     else if (data==53)
                     {
-                        updatePosition(-4,tweedeIndex);
+                        updatePosition(-4);
                     }
                     else if (data==54)
                     {
-                        updatePosition(8,tweedeIndex);
+                        updatePosition(8);
                     }
                     else if (data==55)
                     {
-                        updatePosition(-8,tweedeIndex);
+                        updatePosition(-8);
                     }
                     else if (data==56)
                     {
-                        updatePosition(16,tweedeIndex);
+                        updatePosition(16);
                     }
                     else if (data==57)
                     {
-                        updatePosition(-16,tweedeIndex);
+                        updatePosition(-16);
                     }
                     else if (data==58)
                     {
-                        updatePosition(32,tweedeIndex);
+                        updatePosition(32);
                     }
                     else if (data==59)
                     {
-                        updatePosition(-32,tweedeIndex);
+                        updatePosition(-32);
                     }
-                    else if ((data==60) && (PINC & (1<<PC2))) // alleen als we geen contact zien anders kunnen we door de hystiresus gaan schuiven
+                    else if (data==60) // alleen als we geen contact zien anders kunnen we door de hystiresus gaan schuiven
                     {
-                        doHoming = true;
                         step = 1; // correct status
-                    }
-                    else if (data==61)
-                    {
-                        middenDetectie = true;
+                        if ((PINC & (1<<PC2)) == 0)
+                        {
+                            // we zijn al thuis dus rij even weg
+                            PORTB &= ~(1<<PB0); // voorwaarts
+                            step = stepTabel[1][0];
+                            homingReverse = true;
+                        }
+                        doHoming = true;
                     }
                     else if (data==62)
                     {
