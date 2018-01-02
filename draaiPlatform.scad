@@ -39,7 +39,7 @@ diepteOnderPlaat=brugHoogte+ruimteOnderBrug+dikteBodem+ruimteTussenTandwiel+dikt
 //tussen de rails 16.5
 // bielzen 30
 // rail is boven 1.1 dik dus hardafstand = 16.5 + 1.1 =17.6
-// totale hoogte rails is 1.8 biels +_2.7 staaf = 4.5
+// totale hoogte rails is 1.8 biels +2.7 staaf = 4.5
 railHoogte=4.5;
 bielsAfstand = 7.56;
 bielsHoogte = 1.8;
@@ -906,17 +906,17 @@ module Pootjes()
 }
 
 
-for(i=[-90:90:90]) rotate([0,0,i]) translate([-100,0,-34]) Schijfsteun();
-railsBuiten();
+//for(i=[-90:90:90]) rotate([0,0,i]) translate([-100,0,-34]) Schijfsteun();
+//railsBuiten();
 //lagerHouder();
-onderplaat();
+//onderplaat();
 translate([0,0,-26])mirror([0,0,1])BevestigingsRing();
 for(i=[0:90:270]) rotate([0,0,i])translate([95,95,-18]) OnderkantAfstandBlok();
-motorBeugel();
-translate([107,0,-40])motorPlaat();
-translate([107,0,-40]) motor();
-onderkant();
-tandwielen();
+//motorBeugel();
+//translate([107,0,-40])motorPlaat();
+//translate([107,0,-40]) motor();
+//onderkant();
+//tandwielen();
 //huis();
 //Trap();
 //Pootjes();
@@ -947,4 +947,4 @@ intersection()
    cylinder(d=brugLengte,h=100,center=true,$fn=180);
 }
 }
-BinnenInCirkel();
+//BinnenInCirkel();

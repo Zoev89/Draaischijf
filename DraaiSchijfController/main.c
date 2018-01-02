@@ -20,11 +20,15 @@
 
 //
 // Eeprom Adres offset = 0  blok spanning commandos zoals een blok aansturing behalve support voor seinpalen
-// Eeprom Adres offset = 1  relais aansturing 0x3f = richting inverted 0x3e = richting normaal alle andere waardes worden
-//                          voor de blokrelais selectie waarvan ik alleen 0..5 in gebruik heb
-//                          daar er maar 48 uitgangen zijn is een waarde van 0x30(48) al genoeg om alle relais uit te zetten
+// Eeprom Adres offset = 1  relais aansturing
+//                          Voor de blokrelais selectie waarvan ik alleen 0..5 in gebruik heb
+//                          daar er maar 48 uitgangen zijn is een waarde van 0x30(48) al genoeg om alle blokrelais te zetten bedienen
+//                          58 = locloods lamp aan
+//                          59 = locloods lamp uit
 //                          60 = midden detectie aan
 //                          61 = midden detectie uit (resets the detector)
+//                          62 = richting normaal
+//                          63 = richting inverted
 // Eeprom Adres offset = 2  positie commando 0x3f = get turn status return is TURNING or TURNING_DONE 61= enable midden detectie word uitgezet met zet snelheid op 0
 
 
@@ -157,7 +161,7 @@ uint8_t huidigePositie=0;
 bool    huidigePosititieTweedeIndex;
 int16_t stepTabel[48][2];
 uint8_t decimateDrempel=40; // word ook in Homing gezet
-uint8_t huisDecimation;
+uint8_t huisDecimation;   // het huislampje is maar tijdelijk aan deze variable regelt dat
 bool needsHoming = true;
 
 void Homing()
@@ -419,7 +423,7 @@ void main()
     // ingang
     // PC2 Homing
     // PC3 Platform middel
-    // PC5  output for debugging
+    // PC5 locloods lamp
     DDRC = (1 << DDC1) | (1 << DDC4) | (1<<DDC5);
 
     DDRB = (1 << DDB0)| (1 << DDB1)| (1 << DDB2)| (1 << DDB3)| (1 << DDB4)| (1 << DDB5); // 0..5 output
@@ -547,12 +551,11 @@ void main()
                 }
                 else if ((startAdres+1) == adres)
                 {
-                    // blok relais aaansturing
-                    if (data == 0x3f)
+                    if (data == 63)
                     {
                         PORTC |= (1<<PC1);
                     }
-                    else if (data == 0x3e)
+                    else if (data == 62)
                     {
                         PORTC &= ~(1<<PC1);
                     }
@@ -565,8 +568,17 @@ void main()
                         middenDetected = false;
                         middenDetectie = false;
                     }
+                    else if (data==58)
+                    {
+                        PORTC |= (1<<PC5);
+                    }
+                    else if (data==59)
+                    {
+                        PORTC &= ~(1<<PC5);
+                    }
                     else
                     {
+                        // blok relais aansturing
                         // relais pd2..pd6
                         PORTD = (PORTD & 0b10000011) | ((data&0b011111)<<2);
                     }
